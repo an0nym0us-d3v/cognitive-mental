@@ -4,11 +4,12 @@ from typing import List, Tuple
 import pandas as pd
 import matplotlib.pyplot as plt
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "o3_cot_reasoning.xlsx")
+DATA_FOLDERS = ["CSSRS", "DepSeverity", "Dreaddit", "RedSam", "SDCNL"]
+DATA_FILE_NAME = "o3_cot_reasoning.xlsx"
 LABELS_COLUMN = "Label"
 
 
-def load_labels(path: str = DATA_PATH, column: str = LABELS_COLUMN) -> pd.Series:
+def load_labels(path: str, column: str = LABELS_COLUMN) -> pd.Series:
     """Load the Labels column from the given Excel file.
 
     Args:
@@ -53,11 +54,25 @@ def plot_label_distribution(labels: pd.Series, title: str = "Label Distribution"
 
 
 def main():
-    labels = load_labels()
-    unique = get_unique_labels(labels)
-    print(f"Unique labels ({len(unique)}): {unique}")
-    fig, _ = plot_label_distribution(labels, title="CSSRS Labels Distribution")
-    plt.show()
+    root = os.path.dirname(__file__)
+
+    for dataset in DATA_FOLDERS:
+        fpath = os.path.join(root, dataset, DATA_FILE_NAME)
+        if not os.path.isfile(fpath):
+            print(f"[INFO] Skipping, not found: {fpath}")
+            continue
+        try:
+            labels = load_labels(fpath)
+        except Exception as e:
+            print(f"[ERROR] Failed to load labels for {dataset}: {e}")
+            continue
+        unique = get_unique_labels(labels)
+        print(f"{dataset} unique labels ({len(unique)}): {unique}")
+        fig, _ = plot_label_distribution(labels, title=f"{dataset} Label Distribution")
+        out_path = os.path.join(root, f"{dataset}_label_distribution.png")
+        fig.savefig(out_path)
+        plt.close(fig)
+        print(f"[INFO] Saved: {out_path}")
 
 
 if __name__ == "__main__":
