@@ -79,8 +79,92 @@ def print_confusion_matrix_for_file(file_path: Path) -> None:
     print(f"[INFO] Saved confusion matrix: {out_file}")
 
 
+# --- New accuracy computation helpers ---
+
+def compute_accuracy(file_path: Path) -> float:
+    """Compute accuracy for a single Excel file using normalized labels.
+    Returns NaN if the file cannot be read or has no valid rows.
+    """
+    try:
+        df = pd.read_excel(file_path)
+    except Exception as e:
+        print(f"[ERROR] Failed to read {file_path}: {e}")
+        return float('nan')
+
+    missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
+    if missing:
+        print(f"[WARN] {file_path} missing columns: {missing}")
+        return float('nan')
+
+    sub = df[REQUIRED_COLUMNS].dropna()
+    if sub.empty:
+        return float('nan')
+
+    y_true = sub["Label"].astype(str).str.strip().map(_to_camel_case)
+    y_pred = sub["GPT Label"].astype(str).str.strip().map(_to_camel_case)
+
+    valid_mask = (y_true != "") & (y_pred != "")
+    y_true = y_true[valid_mask]
+    y_pred = y_pred[valid_mask]
+
+    if len(y_true) == 0:
+        return float('nan')
+
+    acc = (y_true == y_pred).mean()
+    return float(acc)
+
+
+def aggregate_accuracies(root: Path) -> pd.DataFrame:
+    """Aggregate accuracies across datasets and target files.
+    Returns a DataFrame with columns: Dataset, File, Accuracy.
+    """
+    records = []
+    for dataset in DATA_FOLDERS:
+        dpath = root / dataset
+        if not dpath.exists() or not dpath.is_dir():
+            print(f"[INFO] Skipping non-folder or missing path: {dpath}")
+            continue
+        for fname in TARGET_FILES:
+            fpath = dpath / fname
+            if not (fpath.exists() and fpath.is_file()):
+                print(f"[INFO] Not found: {fpath}")
+                continue
+            acc = compute_accuracy(fpath)
+            records.append({
+                "Dataset": dataset,
+                "File": fname,
+                "Accuracy": acc,
+            })
+    return pd.DataFrame.from_records(records)
+
+
+def plot_accuracies(df: pd.DataFrame, out_path: Path) -> None:
+    """Plot multi-line chart of accuracy per dataset for each file."""
+    if df.empty:
+        print("[WARN] No accuracy data to plot.")
+        return
+    # Sort datasets in the given order
+    df["Dataset"] = pd.Categorical(df["Dataset"], categories=DATA_FOLDERS, ordered=True)
+    df = df.sort_values(["File", "Dataset"])  # ensure consistent line ordering
+
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(data=df, x="Dataset", y="Accuracy", hue="File", marker="o")
+    plt.ylim(0, 1)
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy by Dataset and File")
+    plt.legend(title="Excel File")
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+    print(f"[INFO] Saved accuracy plot: {out_path}")
+
+
 def main():
     root = Path(__file__).parent
+
+    # Compute and plot accuracies
+    acc_df = aggregate_accuracies(root)
+    plot_accuracies(acc_df, root / "accuracy_plot.png")
 
     for folder in DATA_FOLDERS:
         folder_path = root / folder
