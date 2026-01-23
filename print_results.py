@@ -159,12 +159,31 @@ def plot_accuracies(df: pd.DataFrame, out_path: Path) -> None:
     print(f"[INFO] Saved accuracy plot: {out_path}")
 
 
+def plot_accuracies_bar(df: pd.DataFrame, out_path: Path) -> None:
+    """Plot bar graph of accuracy per dataset grouped by file."""
+    if df.empty:
+        print("[WARN] No accuracy data to plot.")
+        return
+    df["Dataset"] = pd.Categorical(df["Dataset"], categories=DATA_FOLDERS, ordered=True)
+    plt.figure(figsize=(10, 6))
+    sns.barplot(data=df, x="Dataset", y="Accuracy", hue="File")
+    plt.ylim(0, 1)
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy by Dataset and File (Bar)")
+    plt.legend(title="Excel File")
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+    print(f"[INFO] Saved accuracy bar plot: {out_path}")
+
+
 def main():
     root = Path(__file__).parent
 
     # Compute and plot accuracies
     acc_df = aggregate_accuracies(root)
     plot_accuracies(acc_df, root / "accuracy_plot.png")
+    plot_accuracies_bar(acc_df, root / "accuracy_bar_plot.png")
 
     for folder in DATA_FOLDERS:
         folder_path = root / folder
